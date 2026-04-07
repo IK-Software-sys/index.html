@@ -3,11 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>REVERSED BROS: ANTI-CHEAT</title>
+    <title>REVERSED BROS: ANTI-CHEAT FIXED</title>
     <style>
         :root { --sky: #5c94fa; --brick: #914400; --grass: #48a048; --mario-red: #ff4545; --mario-skin: #ffcc99; }
         
-        /* Base Container */
         body { 
             margin: 0; background: #000; overflow: hidden; 
             font-family: 'Arial Black', sans-serif;
@@ -21,35 +20,24 @@
             background: var(--sky);
             position: relative;
             overflow: hidden;
-            /* Initial State */
             transform: rotate(180deg);
             transition: transform 0.3s ease;
         }
 
-        /* The spinning animation for cheaters */
         @keyframes infiniteSpin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
 
-        .spinning {
-            animation: infiniteSpin 3s linear infinite !important;
-        }
+        .spinning { animation: infiniteSpin 3s linear infinite !important; }
 
-        #world {
-            position: absolute; width: 5000px; height: 100%;
-        }
+        #world { position: absolute; width: 5000px; height: 100%; }
 
         #player { width: 32px; height: 40px; position: absolute; z-index: 10; }
         #player-sprite {
             width: 100%; height: 100%; background: var(--mario-red); border: 3px solid #000;
             box-sizing: border-box;
             box-shadow: inset -4px -4px 0px rgba(0,0,0,0.2), 0px -10px 0 #000, 0px -15px 0 var(--mario-red);
-        }
-        #player-sprite::before {
-            content: ''; position: absolute; top: 5px; left: 5px; 
-            width: 15px; height: 10px; background: var(--mario-skin);
-            border: 2px solid #000; box-shadow: 12px 2px 0 #000;
         }
 
         .platform {
@@ -66,7 +54,6 @@
             position: fixed; bottom: 20px; width: 100%;
             display: flex; justify-content: center; gap: 20px;
             z-index: 100;
-            /* Controls stay fixed relative to the user's hand */
         }
 
         .btn {
@@ -74,6 +61,14 @@
             border: 4px solid #fff; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             color: white; font-weight: bold; font-size: 10px;
+        }
+
+        /* Essential for modern mobile browsers */
+        #start-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); z-index: 2000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: white; text-align: center;
         }
 
         #warning-overlay {
@@ -87,9 +82,15 @@
 </head>
 <body>
 
+<div id="start-screen">
+    <h1>REVERSED BROS</h1>
+    <p>Hold your phone UPSIDE DOWN to play.</p>
+    <button id="enable-sensor" style="padding: 15px 30px; font-weight: bold;">START GAME</button>
+</div>
+
 <div id="warning-overlay">
     <h1>⚠️ CHEAT DETECTED</h1>
-    <p>NICE TRY. STOP ROTATING THE PHONE.</p>
+    <p>STOP ROTATING THE PHONE BACK TO NORMAL.</p>
 </div>
 
 <div id="viewport">
@@ -109,20 +110,37 @@
     const world = document.getElementById('world');
     const playerEl = document.getElementById('player');
     const warning = document.getElementById('warning-overlay');
+    const startScreen = document.getElementById('start-screen');
+    const sensorBtn = document.getElementById('enable-sensor');
 
     let player = { x: 100, y: 300, w: 32, h: 40, vx: 0, vy: 0, isGrounded: false };
     let cheatCount = 0;
     let isSpinning = false;
+    let currentJumpForce = -16; // Default jump
 
-    // --- ACCELEROMETER / GYRO LOGIC ---
-    if (window.DeviceOrientationEvent) {
+    // --- SENSOR PERMISSION & DETECTION ---
+    sensorBtn.onclick = () => {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            DeviceOrientationEvent.requestPermission()
+                .then(state => { if (state === 'granted') initSensors(); })
+                .catch(console.error);
+        } else {
+            initSensors();
+        }
+        startScreen.style.display = 'none';
+        update(); 
+    };
+
+    function initSensors() {
         window.addEventListener('deviceorientation', (event) => {
-            const gamma = event.gamma; // Left-to-right tilt
-            const beta = event.beta;   // Front-to-back tilt
-
-            // If phone is rotated roughly 180 degrees (upside down in hand)
-            if (Math.abs(beta) > 130 || Math.abs(beta) < 50 && Math.abs(gamma) > 150) {
-                if (!isSpinning) {
+            // Beta is the tilt forward/backward. 
+            // In Reversed Bros, 180 (or -180) is "upside down" (correct).
+            // Near 0 is "normal/right side up" (cheating).
+            const beta = event.beta; 
+            
+            // If the phone is held "normally" (beta near 0-60), they are cheating.
+            if (Math.abs(beta) < 60) {
+                if (!isSpinning && warning.style.display !== 'flex') {
                     handleCheat();
                 }
             }
@@ -132,14 +150,12 @@
     function handleCheat() {
         cheatCount++;
         warning.style.display = 'flex';
-        
-        // Flip the viewport again so it's STILL upside down for the cheater
-        viewport.style.transform = 'rotate(0deg)'; 
+        viewport.style.transform = 'rotate(0deg)'; // Flip it so it's STILL upside down for them
 
         if (cheatCount > 2) {
             isSpinning = true;
             viewport.classList.add('spinning');
-            warning.innerHTML = "<h1>CHAOS MODE ACTIVATED</h1><p>PLAYING FAIR WAS AN OPTION.</p>";
+            warning.innerHTML = "<h1>CHAOS MODE</h1><p>YOU REFUSED TO PLAY UPSIDE DOWN.</p>";
         }
 
         setTimeout(() => {
@@ -147,7 +163,7 @@
                 warning.style.display = 'none';
                 viewport.style.transform = 'rotate(180deg)';
             }
-        }, 2000);
+        }, 2500);
     }
 
     // --- MAP DATA ---
@@ -174,11 +190,16 @@
     window.onkeyup = e => keys[e.code] = false;
 
     function update() {
+        // Reversed movement logic
         if (keys['ArrowRight'] || keys['KeyD'] || keys['leftBtn']) player.vx -= 1.2;
         if (keys['ArrowLeft'] || keys['KeyA'] || keys['rightBtn']) player.vx += 1.2;
+        
+        // JUMP LOGIC
         if ((keys['Space'] || keys['ArrowUp'] || keys['jumpBtn']) && player.isGrounded) {
-            player.vy = -16;
+            player.vy = currentJumpForce; 
             player.isGrounded = false;
+            // RANDOMIZE NEXT JUMP: Min -12 (low), Max -22 (high)
+            currentJumpForce = -(Math.random() * (22 - 12) + 12);
         }
 
         player.vy += 0.8; 
@@ -200,11 +221,9 @@
             }
         });
 
-        // Camera Follow
         let cameraX = player.x - (window.innerWidth / 2);
         world.style.transform = `translateX(${-cameraX}px)`;
 
-        // Death/Reset
         if (player.y < -300) {
             player.x = 100; player.y = 300; player.vy = 0;
         }
@@ -223,8 +242,6 @@
     setupBtn('btn-left', 'leftBtn');
     setupBtn('btn-right', 'rightBtn');
     setupBtn('btn-jump', 'jumpBtn');
-
-    update();
 </script>
 </body>
 </html>
