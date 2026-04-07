@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>REVERSED BROS: GITHUB EDITION</title>
+    <title>REVERSED BROS: TOTAL CHAOS</title>
     <style>
         :root { --sky: #5c94fa; --brick: #914400; --grass: #48a048; --mario-red: #ff4545; }
         
@@ -12,13 +12,23 @@
         #viewport {
             width: 100vw; height: 100vh; background: var(--sky);
             position: relative; overflow: hidden;
-            /* Default upside down */
             transform: rotate(180deg); 
             transition: transform 0.8s cubic-bezier(0.68, -0.55, 0.27, 1.55);
         }
 
+        /* Flashing Sky Animation */
+        @keyframes skyFlash {
+            0% { background: #ff0000; }
+            20% { background: #00ff00; }
+            40% { background: #0000ff; }
+            60% { background: #ffff00; }
+            80% { background: #ff00ff; }
+            100% { background: #00ffff; }
+        }
+
+        .flashing { animation: skyFlash 0.1s infinite !important; }
+        .spinning { animation: infiniteSpin 1.5s linear infinite !important; }
         @keyframes infiniteSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .spinning { animation: infiniteSpin 1.5s linear infinite !call !important; }
 
         #world { position: absolute; width: 5000px; height: 100%; }
         #player { width: 32px; height: 40px; position: absolute; z-index: 10; }
@@ -35,14 +45,14 @@
 </head>
 <body>
 
-<audio id="chaos-audio" loop>
+<audio id="death-audio">
     <source src="loud indian music Earrape.mp3" type="audio/mpeg">
 </audio>
 
 <div id="start-screen">
     <h1>REVERSED BROS</h1>
-    <p>HOLD PHONE UPSIDE DOWN TO BEGIN</p>
-    <button id="begin" style="padding: 15px 30px; cursor: pointer;">START GAME</button>
+    <p>UPSIDE DOWN TO PLAY</p>
+    <button id="begin" style="padding: 15px 30px;">START</button>
 </div>
 
 <div id="viewport">
@@ -61,13 +71,14 @@
     const viewport = document.getElementById('viewport');
     const world = document.getElementById('world');
     const playerEl = document.getElementById('player');
-    const audio = document.getElementById('chaos-audio');
+    const audio = document.getElementById('death-audio');
     const startBtn = document.getElementById('begin');
 
     let player = { x: 100, y: 300, w: 32, h: 40, vx: 0, vy: 0, isGrounded: false };
     let cheatTicks = 0;
     let isChaos = false;
     let currentJumpForce = -16;
+    let jumpPending = false; // Prevents multiple delayed jumps at once
 
     startBtn.onclick = () => {
         if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -77,32 +88,21 @@
 
     function init() {
         document.getElementById('start-screen').style.display = 'none';
-        window.addEventListener('deviceorientation', handleOrientation);
+        window.addEventListener('deviceorientation', (e) => {
+            if (Math.abs(e.beta) < 60) {
+                cheatTicks++;
+                if (cheatTicks > 20 && !isChaos) startChaos();
+            } else { cheatTicks = 0; }
+        });
         requestAnimationFrame(update);
-    }
-
-    function handleOrientation(e) {
-        // If phone is held normally (Beta between -60 and 60)
-        if (Math.abs(e.beta) < 60) {
-            cheatTicks++;
-            if (cheatTicks > 20 && !isChaos) {
-                startChaos();
-            }
-        } else {
-            // If they rotate back to upside down, we could stop chaos, 
-            // but usually "Chaos Mode" is a permanent punishment.
-            cheatTicks = 0;
-        }
     }
 
     function startChaos() {
         isChaos = true;
-        audio.play().catch(e => console.log("Audio play failed:", e));
-        viewport.style.transform = 'rotate(0deg)'; // Flip world back to "normal" orientation
-        viewport.classList.add('spinning'); // Add the constant spin
+        viewport.style.transform = 'rotate(0deg)'; 
+        viewport.classList.add('spinning', 'flashing');
     }
 
-    // --- GAME LOGIC ---
     const platforms = [{ x: 0, y: 0, w: 1000, h: 60 }, { x: 1100, y: 200, w: 200, h: 40 }, { x: 1400, y: 400, w: 200, h: 40 }];
     platforms.forEach(p => {
         const d = document.createElement('div');
@@ -113,18 +113,26 @@
 
     const keys = {};
     function update() {
-        // Physics modifiers for chaos
         let gravity = isChaos ? (0.8 + Math.random() * 0.5) : 0.8;
         let moveSpeed = isChaos ? 2.5 : 1.2;
 
         if (keys['leftBtn']) player.vx -= moveSpeed;
         if (keys['rightBtn']) player.vx += moveSpeed;
         
-        if (keys['jumpBtn'] && player.isGrounded) {
-            player.vy = currentJumpForce;
-            player.isGrounded = false;
-            // Randomized jump altitude
-            currentJumpForce = -(Math.random() * (24 - 12) + 12);
+        // JUMP LOGIC WITH DELAY
+        if (keys['jumpBtn'] && player.isGrounded && !jumpPending) {
+            jumpPending = true;
+            // Random delay between 300ms and 1000ms
+            let delay = Math.random() * 700 + 300;
+            
+            setTimeout(() => {
+                if (player.isGrounded) { // Check if still on ground after delay
+                    player.vy = currentJumpForce;
+                    player.isGrounded = false;
+                    currentJumpForce = -(Math.random() * 12 + 12);
+                }
+                jumpPending = false;
+            }, delay);
         }
 
         player.vy += gravity;
@@ -137,25 +145,27 @@
             if (player.x < p.x + p.w && player.x + player.w > p.x &&
                 player.y < p.y + p.h && player.y + player.h > p.y) {
                 if (player.vy > 0 && (player.y + player.vy) >= (p.y + p.h - 15)) {
-                    player.y = p.y + p.h;
-                    player.vy = 0;
-                    player.isGrounded = true;
+                    player.y = p.y + p.h; player.vy = 0; player.isGrounded = true;
                 }
             }
         });
 
-        // Chaos Visuals: Player shakes and flickers
         if (isChaos) {
-            playerEl.style.filter = `invert(${Math.random() > 0.9 ? 1 : 0}) hue-rotate(${Date.now() % 360}deg)`;
-            playerEl.style.transform = `translate(${Math.random()*4}px, ${Math.random()*4}px)`;
+            playerEl.style.filter = `hue-rotate(${Date.now() % 360}deg)`;
+            playerEl.style.transform = `scale(${1 + Math.sin(Date.now()/100)*0.2})`;
         }
 
         world.style.transform = `translateX(${-(player.x - window.innerWidth / 2)}px)`;
-        if (player.y < -400) { player.x = 100; player.y = 300; player.vy = 0; }
+
+        // DEATH LOGIC
+        if (player.y < -400) {
+            audio.currentTime = 0; // Restart sound
+            audio.play().catch(e => {}); 
+            player.x = 100; player.y = 300; player.vy = 0;
+        }
 
         playerEl.style.left = player.x + 'px';
         playerEl.style.bottom = player.y + 'px';
-
         requestAnimationFrame(update);
     }
 
